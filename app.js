@@ -4,6 +4,7 @@ const morgan = require("morgan");
 const serviceRoutes = require("./src/routes/serviceRoutes");
 const testimonialRoutes = require("./src/routes/testimonialRoutes");
 const blogRoutes = require("./src/routes/blogRoutes");
+const callbackRoutes = require("./src/routes/callbackRoutes");
 
 app.use(express.json());
 app.use(morgan("dev"));
@@ -11,6 +12,7 @@ app.use(morgan("dev"));
 app.use("/api/services", serviceRoutes);
 app.use("/api/testimonials", testimonialRoutes);
 app.use("/api/blogs", blogRoutes);
+app.use("/api/callbacks", callbackRoutes);
 
 
 module.exports = app;
