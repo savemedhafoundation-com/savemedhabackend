@@ -8,6 +8,7 @@ const testimonialRoutes = require("./src/routes/testimonialRoutes");
 const blogRoutes = require("./src/routes/blogRoutes");
 const ebookRoutes = require("./src/routes/ebookRoutes");
 const upcomingEventRoutes = require("./src/routes/upcomingEventRoutes");
+const ongoingEventRoutes = require("./src/routes/ongoingEventRoutes");
 const callbackRoutes = require("./src/routes/callbackRoutes");
 const newsletterRoutes = require("./src/routes/newsletterRoutes");
 const userRoutes = require("./src/routes/userRoutes");
@@ -35,6 +36,8 @@ app.use("/api/blogs", authMiddleware, blogRoutes);
 app.use("/api/ebooks", ebookRoutes);
 // Upcoming events: router handles auth for writes; reads remain public
 app.use("/api/upcoming-events", upcomingEventRoutes);
+// Ongoing events: router handles auth for writes; reads remain public
+app.use("/api/ongoing-events", ongoingEventRoutes);
 
 // Public endpoints
 app.use("/api/callbacks", callbackRoutes);
