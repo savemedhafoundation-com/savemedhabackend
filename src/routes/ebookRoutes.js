@@ -31,10 +31,18 @@ const storage = multer.diskStorage({
 const upload = multer({
   storage,
   fileFilter: (_req, file, cb) => {
-    if (file.mimetype !== "application/pdf") {
-      return cb(new Error("Only PDF files are allowed"));
+    const isPdfField = file.fieldname === "pdf" || file.fieldname === "file";
+    const isImageField = file.fieldname === "image" || file.fieldname === "banner";
+
+    if (isPdfField && file.mimetype === "application/pdf") {
+      return cb(null, true);
     }
-    cb(null, true);
+
+    if (isImageField && file.mimetype.startsWith("image/")) {
+      return cb(null, true);
+    }
+
+    return cb(new Error("Invalid file type"));
   },
 });
 
@@ -49,6 +57,8 @@ router.post(
   upload.fields([
     { name: "pdf", maxCount: 1 },
     { name: "file", maxCount: 1 },
+    { name: "image", maxCount: 1 },
+    { name: "banner", maxCount: 1 },
   ]),
   createEbook
 );
@@ -58,6 +68,8 @@ router.put(
   upload.fields([
     { name: "pdf", maxCount: 1 },
     { name: "file", maxCount: 1 },
+    { name: "image", maxCount: 1 },
+    { name: "banner", maxCount: 1 },
   ]),
   updateEbook
 );
