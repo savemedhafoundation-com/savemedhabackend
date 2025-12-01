@@ -1,10 +1,12 @@
 const express = require("express");
+const path = require("path");
 const app = express();
 const morgan = require("morgan");
 const cors = require("cors");
 const serviceRoutes = require("./src/routes/serviceRoutes");
 const testimonialRoutes = require("./src/routes/testimonialRoutes");
 const blogRoutes = require("./src/routes/blogRoutes");
+const ebookRoutes = require("./src/routes/ebookRoutes");
 const callbackRoutes = require("./src/routes/callbackRoutes");
 const newsletterRoutes = require("./src/routes/newsletterRoutes");
 const userRoutes = require("./src/routes/userRoutes");
@@ -19,6 +21,7 @@ app.use(
 );
 app.use(express.json());
 app.use(morgan("dev"));
+app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
 // Auth routes (login/register) remain public
 app.use("/api/users", userRoutes);
@@ -27,6 +30,8 @@ app.use("/api/users", userRoutes);
 app.use("/api/services", authMiddleware, serviceRoutes);
 app.use("/api/testimonials", authMiddleware, testimonialRoutes);
 app.use("/api/blogs", authMiddleware, blogRoutes);
+// Ebooks: router handles auth for writes; reads remain public
+app.use("/api/ebooks", ebookRoutes);
 
 // Public endpoints
 app.use("/api/callbacks", callbackRoutes);
