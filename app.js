@@ -11,6 +11,7 @@ const upcomingEventRoutes = require("./src/routes/upcomingEventRoutes");
 const ongoingEventRoutes = require("./src/routes/ongoingEventRoutes");
 const callbackRoutes = require("./src/routes/callbackRoutes");
 const newsletterRoutes = require("./src/routes/newsletterRoutes");
+const treatmentRoutes = require("./src/routes/treatmentRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const authMiddleware = require("./src/middlewares/authMiddleware");
 
@@ -38,6 +39,8 @@ app.use("/api/ebooks", ebookRoutes);
 app.use("/api/upcoming-events", upcomingEventRoutes);
 // Ongoing events: router handles auth for writes; reads remain public
 app.use("/api/ongoing-events", ongoingEventRoutes);
+// Treatments: router handles auth for writes; reads remain public
+app.use("/api/treatments", treatmentRoutes);
 
 // Public endpoints
 app.use("/api/callbacks", callbackRoutes);
