@@ -15,6 +15,7 @@ const treatmentRoutes = require("./src/routes/treatmentRoutes");
 const treatmentSubCategoryRoutes = require("./src/routes/treatmentSubCategoryRoutes");
 const treatmentDetailRoutes = require("./src/routes/treatmentDetailRoutes");
 const addressRoutes = require("./src/routes/addressRoutes");
+const contactUsRoutes = require("./src/routes/contactUsRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const authMiddleware = require("./src/middlewares/authMiddleware");
 
@@ -52,6 +53,8 @@ app.use("/api/treatment-sub-categories", treatmentSubCategoryRoutes);
 app.use("/api/treatment-details", treatmentDetailRoutes);
 // Addresses: router handles auth for writes; reads remain public
 app.use("/api/addresses", addressRoutes);
+// Contact submissions: router handles auth for writes; reads remain public
+app.use("/api/contact-us", contactUsRoutes);
 
 // Public endpoints
 app.use("/api/callbacks", callbackRoutes);
