@@ -1,6 +1,19 @@
 const Treatment = require("../models/Treatment");
 const cloudinary = require("../config/cloudinary");
 
+const normalizeTitle = (value) => {
+  if (!value) return "";
+  // Replace internal whitespace sequences with a single hyphen
+  return value.trim().replace(/\s+/g, "-");
+};
+
+const updatenormalizeTitle = (value) => {
+  if (!value) return "";
+
+  // Do NOT use trim() — so nothing from beginning/end is removed
+  return value.replace(/ +/g, "-"); // Replace one or more spaces with single "-"
+};
+
 const uploadImage = async (file) => {
   const base64Image = `data:${file.mimetype};base64,${file.buffer.toString("base64")}`;
 
@@ -42,7 +55,8 @@ const getTreatmentById = async (req, res) => {
 
 const createTreatment = async (req, res) => {
   try {
-    const title = req.body.title?.trim();
+    // const title = req.body.title?.trim();
+    const title = normalizeTitle(req.body.title);
     const colorCode = req.body.colorCode?.trim();
 
     if (!title || !colorCode) {
@@ -77,7 +91,8 @@ const updateTreatment = async (req, res) => {
       return res.status(404).json({ message: "Treatment not found" });
     }
 
-    const title = req.body.title?.trim();
+    // const title = req.body.title?.trim();
+    const title = req.body.title ? updatenormalizeTitle(req.body.title) : undefined;
     const colorCode = req.body.colorCode?.trim();
 
     if (title !== undefined) {
