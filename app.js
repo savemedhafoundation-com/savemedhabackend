@@ -13,6 +13,7 @@ const callbackRoutes = require("./src/routes/callbackRoutes");
 const newsletterRoutes = require("./src/routes/newsletterRoutes");
 const treatmentRoutes = require("./src/routes/treatmentRoutes");
 const treatmentSubCategoryRoutes = require("./src/routes/treatmentSubCategoryRoutes");
+const treatmentDetailRoutes = require("./src/routes/treatmentDetailRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const authMiddleware = require("./src/middlewares/authMiddleware");
 
@@ -46,6 +47,8 @@ app.use("/api/ongoing-events", ongoingEventRoutes);
 app.use("/api/treatments", treatmentRoutes);
 // Treatment sub-categories: router handles auth for writes; reads remain public
 app.use("/api/treatment-sub-categories", treatmentSubCategoryRoutes);
+// Treatment details: router handles auth for writes; reads remain public
+app.use("/api/treatment-details", treatmentDetailRoutes);
 
 // Public endpoints
 app.use("/api/callbacks", callbackRoutes);
