@@ -10,6 +10,7 @@ const connectDB = async () => {
     if (cached.conn) return cached.conn;
 
     if (!cached.promise) {
+      console.log("Connecting to Mongo...");
       cached.promise = mongoose.connect(process.env.MONGO_URI, {
         serverSelectionTimeoutMS: 10000,
       });

@@ -33,6 +33,11 @@ app.use(express.json());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Lightweight health check (no DB call)
+app.get("/api/health", (_req, res) =>
+  res.json({ ok: true, uptime: process.uptime(), ts: Date.now() })
+);
+
 // Auth routes (login/register) remain public
 app.use("/api/users", userRoutes);
 
