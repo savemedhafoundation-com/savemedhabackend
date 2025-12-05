@@ -16,6 +16,8 @@ const treatmentSubCategoryRoutes = require("./src/routes/treatmentSubCategoryRou
 const treatmentDetailRoutes = require("./src/routes/treatmentDetailRoutes");
 const addressRoutes = require("./src/routes/addressRoutes");
 const contactUsRoutes = require("./src/routes/contactUsRoutes");
+const jobRoutes = require("./src/routes/jobRoutes");
+const applicationRoutes = require("./src/routes/applicationRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const authMiddleware = require("./src/middlewares/authMiddleware");
 const globalErrorHandler = require("./src/middlewares/globalErrorHandler");
@@ -56,6 +58,9 @@ app.use("/api/treatment-details", treatmentDetailRoutes);
 app.use("/api/addresses", addressRoutes);
 // Contact submissions: router handles auth for writes; reads remain public
 app.use("/api/contact-us", contactUsRoutes);
+// Careers and applications
+app.use("/api/jobs", jobRoutes);
+app.use("/api/applications", applicationRoutes);
 
 // Public endpoints
 app.use("/api/callbacks", callbackRoutes);

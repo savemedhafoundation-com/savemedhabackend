@@ -11,9 +11,9 @@ const ensureJwtConfigured = () => {
   }
 };
 
-const generateToken = (userId) => {
+const generateToken = (userId, tokenVersion) => {
   ensureJwtConfigured();
-  return jwt.sign({ userId }, JWT_SECRET, { expiresIn: "7d" });
+  return jwt.sign({ userId, tokenVersion }, JWT_SECRET, { expiresIn: "7d" });
 };
 
 const uploadUserImage = async (file) => {
@@ -69,7 +69,8 @@ const registerUser = async (req, res) => {
       password,
     });
 
-    const token = generateToken(user._id);
+    // const token = generateToken(user._id);
+    const token = generateToken(user._id, user.tokenVersion);
     return res.status(201).json({ user, token });
   } catch (error) {
     console.error("Failed to register user:", error);
@@ -82,7 +83,7 @@ const loginUser = async (req, res) => {
     ensureJwtConfigured();
 
     const { email, password } = req.body;
-    console.log("dfvnfvk",email,password);
+    // console.log("dfvnfvk",email,password);
     if (!email || !password) {
       return res.status(400).json({ message: "Email and password are required" });
     }
@@ -96,8 +97,11 @@ const loginUser = async (req, res) => {
     if (!isMatch) {
       return res.status(401).json({ message: "Invalid credentials" });
     }
-
-    const token = generateToken(user._id);
+ 
+    user.tokenVersion += 1;
+    await user.save();
+    // const token = generateToken(user._id);
+    const token = generateToken(user._id, user.tokenVersion);
     return res.status(200).json({ user, token });
   } catch (error) {
     console.error("Failed to login:", error);

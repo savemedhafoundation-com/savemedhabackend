@@ -12,6 +12,7 @@ const userSchema = new mongoose.Schema(
     userImage: { type: String, trim: true },
     userImagePublicId: { type: String, trim: true },
     password: { type: String, required: true, minlength: 6 },
+    tokenVersion : { type: Number, default: 0 },
   },
   { timestamps: true }
 );
