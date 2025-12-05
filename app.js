@@ -66,16 +66,6 @@ app.use("/api/applications", applicationRoutes);
 app.use("/api/callbacks", callbackRoutes);
 app.use("/api/newsletter", newsletterRoutes);
 
-//test routes for global error handler
-app.get("/", (req, res, next) => {
-  // res.send("Hello from Savemedha");
-  const errorMsg = new Error("Test error from Savemedha");
-  errorMsg.statusCode = 500;
-  next(errorMsg);
-});
-
-// ❗ Must be after all routes 
-//this is using in getSubscription of newsletterController
 app.use(globalErrorHandler);
 
 
