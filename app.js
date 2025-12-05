@@ -74,7 +74,8 @@ app.get("/", (req, res, next) => {
   next(errorMsg);
 });
 
-// ❗ Must be after all routes
+// ❗ Must be after all routes 
+//this is using in getSubscription of newsletterController
 app.use(globalErrorHandler);
 
 
