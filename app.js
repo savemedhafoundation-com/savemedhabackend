@@ -18,6 +18,7 @@ const addressRoutes = require("./src/routes/addressRoutes");
 const contactUsRoutes = require("./src/routes/contactUsRoutes");
 const userRoutes = require("./src/routes/userRoutes");
 const authMiddleware = require("./src/middlewares/authMiddleware");
+const globalErrorHandler = require("./src/middlewares/globalErrorHandler");
 
 app.use(
   cors({
@@ -59,6 +60,17 @@ app.use("/api/contact-us", contactUsRoutes);
 // Public endpoints
 app.use("/api/callbacks", callbackRoutes);
 app.use("/api/newsletter", newsletterRoutes);
+
+//test routes for global error handler
+app.get("/", (req, res, next) => {
+  // res.send("Hello from Savemedha");
+  const errorMsg = new Error("Test error from Savemedha");
+  errorMsg.statusCode = 500;
+  next(errorMsg);
+});
+
+// ❗ Must be after all routes
+app.use(globalErrorHandler);
 
 
 module.exports = app;

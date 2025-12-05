@@ -41,8 +41,13 @@ const getSubscription = async (req, res) => {
 
     res.status(200).json(subscription);
   } catch (error) {
-    console.error("Failed to fetch newsletter subscription:", error);
-    res.status(500).json({ message: "Failed to fetch newsletter subscription" });
+    // console.error("Failed to fetch newsletter subscription:", error);
+    // res.status(500).json({ message: "Failed to fetch newsletter subscription" });
+    
+    // this error is handled by global error handler
+    error.statusCode = 500;
+      error.message = "Failed to fetch newsletter subscriptions";
+       return next(error); // ❗ Sends error to global middleware
   }
 };
 
