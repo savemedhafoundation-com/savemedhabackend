@@ -3,10 +3,21 @@ const path = require("path");
 const Ebook = require("../models/Ebook");
 const cloudinary = require("../config/cloudinary");
 
-const UPLOAD_DIR = path.join(__dirname, "../../uploads/ebooks");
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+const UPLOAD_DIR =
+  process.env.EBOOK_UPLOAD_DIR ||
+  (process.env.VERCEL ? path.join("/tmp", "uploads", "ebooks") : path.join(__dirname, "../../uploads/ebooks"));
+
+const ensureUploadDir = () => {
+  try {
+    if (!fs.existsSync(UPLOAD_DIR)) {
+      fs.mkdirSync(UPLOAD_DIR, { recursive: true });
+    }
+  } catch (err) {
+    console.error("Failed to ensure ebook upload directory:", err);
+  }
+};
+
+ensureUploadDir();
 
 const normalizeArray = (value) => {
   if (!value) return [];
@@ -32,6 +43,7 @@ const getUploadedImage = (req) => {
 };
 
 const uploadPdf = (file) => {
+  ensureUploadDir();
   return {
     pdfUrl: `/uploads/ebooks/${file.filename}`,
     cloudinaryId: file.filename,
