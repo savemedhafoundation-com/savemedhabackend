@@ -10,7 +10,9 @@ const connectDB = async () => {
     if (cached.conn) return cached.conn;
 
     if (!cached.promise) {
-      cached.promise = mongoose.connect(process.env.MONGO_URI);
+      cached.promise = mongoose.connect(process.env.MONGO_URI, {
+        serverSelectionTimeoutMS: 10000,
+      });
     }
 
     cached.conn = await cached.promise;
@@ -18,7 +20,7 @@ const connectDB = async () => {
     return cached.conn;
   } catch (error) {
     console.error("DB Error:", error);
-    process.exit(1);
+    throw error;
   }
 };
 
