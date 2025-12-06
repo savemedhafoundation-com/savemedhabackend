@@ -42,9 +42,9 @@ app.get("/api/health", (_req, res) =>
 app.use("/api/users", userRoutes);
 
 // Protected admin resources
-app.use("/api/services", authMiddleware, serviceRoutes);
-app.use("/api/testimonials", authMiddleware, testimonialRoutes);
-app.use("/api/blogs", authMiddleware, blogRoutes);
+app.use("/api/services", serviceRoutes);
+app.use("/api/testimonials", testimonialRoutes);
+app.use("/api/blogs", blogRoutes);
 // Ebooks: router handles auth for writes; reads remain public
 app.use("/api/ebooks", ebookRoutes);
 // Upcoming events: router handles auth for writes; reads remain public
