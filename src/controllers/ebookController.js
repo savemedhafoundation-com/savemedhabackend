@@ -55,8 +55,9 @@ const getUploadedImage = (req) => {
 const uploadPdf = async (file) => {
   const uploadResult = await streamUpload(file, {
     folder: "savemedha/ebooks/pdfs",
-    resource_type: "raw",
+    resource_type: "auto", // allow pdfs without raw permission issues
     format: "pdf",
+    type: "upload",
   });
 
   return {

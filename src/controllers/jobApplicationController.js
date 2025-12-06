@@ -2,11 +2,7 @@ const path = require("path");
 const fs = require("fs");
 const Job = require("../models/Job").Job;
 const JobApplication = require("../models/JobApplication");
-
-const UPLOAD_DIR = path.join(__dirname, "../../uploads/resumes");
-if (!fs.existsSync(UPLOAD_DIR)) {
-  fs.mkdirSync(UPLOAD_DIR, { recursive: true });
-}
+const cloudinary = require("../config/cloudinary");
 
 const getUploadedResume = (req) => {
   if (req.file) return req.file;
@@ -16,6 +12,23 @@ const getUploadedResume = (req) => {
   }
   return null;
 };
+
+const streamUpload = (file) =>
+  new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(
+      {
+        folder: "savemedha/job-applications/resumes",
+        resource_type: "auto", // allow pdfs without raw permission issues
+        format: "pdf",
+      },
+      (err, result) => {
+        if (err) return reject(err);
+        return resolve(result);
+      }
+    );
+
+    uploadStream.end(file.buffer);
+  });
 
 const applyToJob = async (req, res) => {
   try {
@@ -46,7 +59,9 @@ const applyToJob = async (req, res) => {
       return res.status(400).json({ message: "Resume PDF file is required" });
     }
 
-    const resumeUrl = `/uploads/resumes/${uploadedResume.filename}`;
+    const uploaded = await streamUpload(uploadedResume);
+    const resumeUrl = uploaded.secure_url;
+    const cloudinaryId = uploaded.public_id;
 
     const application = await JobApplication.create({
       job: job._id,
@@ -55,7 +70,7 @@ const applyToJob = async (req, res) => {
       phone,
       whyWeHireYou,
       cvUrl: resumeUrl,
-      cvFilename: uploadedResume.filename,
+      cvFilename: cloudinaryId,
       agreeTerms: true,
     });
 
