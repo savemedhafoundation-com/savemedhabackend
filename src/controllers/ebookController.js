@@ -19,6 +19,16 @@ const ensureUploadDir = () => {
 
 ensureUploadDir();
 
+const streamUpload = (file, options) =>
+  new Promise((resolve, reject) => {
+    const uploadStream = cloudinary.uploader.upload_stream(options, (err, result) => {
+      if (err) return reject(err);
+      return resolve(result);
+    });
+
+    uploadStream.end(file.buffer);
+  });
+
 const normalizeArray = (value) => {
   if (!value) return [];
   if (Array.isArray(value)) return value.map((item) => `${item}`.trim()).filter(Boolean);
@@ -42,16 +52,26 @@ const getUploadedImage = (req) => {
   return null;
 };
 
-const uploadPdf = (file) => {
-  ensureUploadDir();
+const uploadPdf = async (file) => {
+  const uploadResult = await streamUpload(file, {
+    folder: "savemedha/ebooks/pdfs",
+    resource_type: "raw",
+    format: "pdf",
+  });
+
   return {
-    pdfUrl: `/uploads/ebooks/${file.filename}`,
-    cloudinaryId: file.filename,
+    pdfUrl: uploadResult.secure_url,
+    cloudinaryId: uploadResult.public_id,
   };
 };
 
 const removeStoredPdf = async (filename) => {
   if (!filename) return;
+  try {
+    await cloudinary.uploader.destroy(filename, { resource_type: "raw" });
+  } catch (err) {
+    console.error("Failed to delete PDF from Cloudinary:", err);
+  }
   await removeLocalFile(path.join(UPLOAD_DIR, filename));
 };
 
@@ -67,13 +87,11 @@ const removeLocalFile = async (fullPath) => {
 };
 
 const uploadImage = async (file) => {
-  const uploadResult = await cloudinary.uploader.upload(file.path, {
+  const uploadResult = await streamUpload(file, {
     folder: "savemedha/ebooks/banners",
     resource_type: "image",
     format: "jpg",
   });
-
-  await removeLocalFile(file.path);
 
   return {
     imageUrl: uploadResult.secure_url,
@@ -126,7 +144,7 @@ const createEbook = async (req, res) => {
       return res.status(400).json({ message: "Banner image is required" });
     }
 
-    const { pdfUrl, cloudinaryId } = uploadPdf(pdfFile);
+    const { pdfUrl, cloudinaryId } = await uploadPdf(pdfFile);
     const { imageUrl, imagePublicId } = await uploadImage(imageFile);
 
     const ebook = await Ebook.create({
@@ -165,7 +183,7 @@ const updateEbook = async (req, res) => {
 
     const pdfFile = getUploadedPdf(req);
     if (pdfFile) {
-      const { pdfUrl, cloudinaryId } = uploadPdf(pdfFile);
+      const { pdfUrl, cloudinaryId } = await uploadPdf(pdfFile);
 
       if (ebook.cloudinaryId) {
         await removeStoredPdf(ebook.cloudinaryId);
@@ -249,6 +267,10 @@ const downloadEbook = async (req, res) => {
 
     const fileName = ebook.cloudinaryId;
     const filePath = path.join(UPLOAD_DIR, fileName);
+
+    if (ebook.pdfUrl && ebook.pdfUrl.startsWith("http")) {
+      return res.redirect(ebook.pdfUrl);
+    }
 
     if (!fs.existsSync(filePath)) {
       return res.status(404).json({ message: "PDF file not found" });

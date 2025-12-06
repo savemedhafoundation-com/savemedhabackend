@@ -1,7 +1,5 @@
 const express = require("express");
 const multer = require("multer");
-const path = require("path");
-const fs = require("fs");
 const authMiddleware = require("../middlewares/authMiddleware");
 const {
   getEbooks,
@@ -15,21 +13,9 @@ const {
 
 const router = express.Router();
 
-const uploadDir = path.join(__dirname, "../../uploads/ebooks");
-if (!fs.existsSync(uploadDir)) {
-  fs.mkdirSync(uploadDir, { recursive: true });
-}
-
-const storage = multer.diskStorage({
-  destination: (_req, _file, cb) => cb(null, uploadDir),
-  filename: (_req, file, cb) => {
-    const sanitized = file.originalname.replace(/\s+/g, "_");
-    cb(null, `${Date.now()}-${sanitized}`);
-  },
-});
-
 const upload = multer({
-  storage,
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB combined safety limit
   fileFilter: (_req, file, cb) => {
     const isPdfField = file.fieldname === "pdf" || file.fieldname === "file";
     const isImageField = file.fieldname === "image" || file.fieldname === "banner";
