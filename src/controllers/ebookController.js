@@ -1,5 +1,6 @@
 const fs = require("fs");
 const path = require("path");
+const { Readable } = require("stream");
 const Ebook = require("../models/Ebook");
 const cloudinary = require("../config/cloudinary");
 
@@ -26,7 +27,9 @@ const streamUpload = (file, options) =>
       return resolve(result);
     });
 
-    uploadStream.end(file.buffer);
+    const source = file.buffer ? Readable.from(file.buffer) : fs.createReadStream(file.path);
+    source.on("error", reject);
+    source.pipe(uploadStream);
   });
 
 const normalizeArray = (value) => {
@@ -55,7 +58,7 @@ const getUploadedImage = (req) => {
 const uploadPdf = async (file) => {
   const uploadResult = await streamUpload(file, {
     folder: "savemedha/ebooks/pdfs",
-    resource_type: "auto", // allow pdfs without raw permission issues
+    resource_type: "raw", // explicit raw to avoid mixed-type deletes
     format: "pdf",
     type: "upload",
   });
@@ -73,7 +76,6 @@ const removeStoredPdf = async (filename) => {
   } catch (err) {
     console.error("Failed to delete PDF from Cloudinary:", err);
   }
-  await removeLocalFile(path.join(UPLOAD_DIR, filename));
 };
 
 const removeLocalFile = async (fullPath) => {
@@ -93,6 +95,8 @@ const uploadImage = async (file) => {
     resource_type: "image",
     format: "jpg",
   });
+
+  await removeLocalFile(file.path);
 
   return {
     imageUrl: uploadResult.secure_url,
@@ -262,27 +266,19 @@ const downloadEbook = async (req, res) => {
   try {
     const ebook = await Ebook.findById(req.params.id);
 
-    if (!ebook) {
-      return res.status(404).json({ message: "Ebook not found" });
-    }
-
-    const fileName = ebook.cloudinaryId;
-    const filePath = path.join(UPLOAD_DIR, fileName);
-
-    if (ebook.pdfUrl && ebook.pdfUrl.startsWith("http")) {
-      return res.redirect(ebook.pdfUrl);
-    }
-
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ message: "PDF file not found" });
-    }
-
-    const downloadName = ebook.title ? `${ebook.title}.pdf` : fileName;
-    return res.download(filePath, downloadName);
-  } catch (error) {
-    console.error("Failed to download ebook:", error);
-    res.status(500).json({ message: "Failed to download ebook" });
+  if (!ebook) {
+    return res.status(404).json({ message: "Ebook not found" });
   }
+
+  if (ebook.pdfUrl && ebook.pdfUrl.startsWith("http")) {
+    return res.redirect(ebook.pdfUrl);
+  }
+
+  return res.status(404).json({ message: "PDF file not found" });
+} catch (error) {
+  console.error("Failed to download ebook:", error);
+  res.status(500).json({ message: "Failed to download ebook" });
+}
 };
 
 module.exports = {

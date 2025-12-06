@@ -18,9 +18,9 @@ const streamUpload = (file) =>
     const uploadStream = cloudinary.uploader.upload_stream(
       {
         folder: "savemedha/job-applications/resumes",
-        resource_type: "auto", // allow pdfs without raw permission issues
+        resource_type: "raw", // explicit raw for pdfs
         format: "pdf",
-      },
+        },
       (err, result) => {
         if (err) return reject(err);
         return resolve(result);
