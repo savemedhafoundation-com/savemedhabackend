@@ -1,7 +1,10 @@
 const globalErrorHandler = (err, req, res, next) => {
+  if (res.headersSent) {
+    return next(err);
+  }
+
   console.error("Global Error Handler:", err);
 
-  // Default values
   const statusCode = err.statusCode || 500;
   const message = err.message || "Internal Server Error";
 
@@ -9,9 +12,7 @@ const globalErrorHandler = (err, req, res, next) => {
     success: false,
     status: statusCode,
     message,
-    // Only show stack in development
-    // stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
-    stack : err.stack
+    stack: process.env.NODE_ENV === "development" ? err.stack : undefined,
   });
 };
 

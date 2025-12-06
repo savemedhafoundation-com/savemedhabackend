@@ -3,39 +3,40 @@ const mongoose = require("mongoose");
 // Fail fast instead of buffering queries when disconnected
 mongoose.set("bufferCommands", false);
 
-let cached = global._mongoose;
-if (!cached) {
-  cached = global._mongoose = { conn: null, promise: null };
-}
+let isConnected = false;
+let connectionPromise;
 
 const connectDB = async () => {
   const mongoUri = process.env.MONGO_URI;
-
   if (!mongoUri) {
     throw new Error("MONGO_URI is not defined");
   }
 
-  try {
-    if (cached.conn) return cached.conn;
+  if (isConnected || mongoose.connection.readyState === 1) {
+    return mongoose.connection;
+  }
 
-    if (!cached.promise) {
-      console.log("Connecting to Mongo...");
-      cached.promise = mongoose.connect(mongoUri, {
+  if (!connectionPromise) {
+    console.log("Connecting to MongoDB...");
+    connectionPromise = mongoose
+      .connect(mongoUri, {
         serverSelectionTimeoutMS: 8000,
         connectTimeoutMS: 8000,
         socketTimeoutMS: 20000,
+      })
+      .then((db) => {
+        isConnected = db.connections[0].readyState === 1;
+        console.log("MongoDB connected");
+        return db;
+      })
+      .catch((err) => {
+        connectionPromise = null; // allow retry on next invocation
+        console.error("Mongo connection error:", err);
+        throw err;
       });
-    }
-
-    cached.conn = await cached.promise;
-    console.log("MongoDB Connected");
-    return cached.conn;
-  } catch (error) {
-    // Clear cached promise so subsequent invocations can retry
-    cached.promise = null;
-    console.error("DB Error:", error);
-    throw error;
   }
+
+  return connectionPromise;
 };
 
 module.exports = connectDB;

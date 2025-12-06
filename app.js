@@ -33,6 +33,10 @@ app.use(express.json());
 app.use(morgan("dev"));
 app.use("/uploads", express.static(path.join(__dirname, "uploads")));
 
+// Quick responses to keep serverless invocations short
+app.get("/", (_req, res) => res.json({ ok: true, message: "API is running" }));
+app.get("/favicon.ico", (_req, res) => res.status(204).end());
+
 // Lightweight health check (no DB call)
 app.get("/api/health", (_req, res) =>
   res.json({ ok: true, uptime: process.uptime(), ts: Date.now() })
@@ -71,6 +75,12 @@ app.use("/api/applications", applicationRoutes);
 app.use("/api/callbacks", callbackRoutes);
 app.use("/api/newsletter", newsletterRoutes);
 
+// 404 handler for any unmatched routes
+app.use((req, res) => {
+  res.status(404).json({ success: false, message: "Not found" });
+});
+
+// Global error handler must be last
 app.use(globalErrorHandler);
 
 

@@ -1,6 +1,12 @@
 const Treatment = require("../models/Treatment");
 const cloudinary = require("../config/cloudinary");
 
+const httpError = (statusCode, message) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
 const normalizeTitle = (value) => {
   if (!value) return "";
   // Replace internal whitespace sequences with a single hyphen
@@ -28,43 +34,43 @@ const uploadImage = async (file) => {
   };
 };
 
-const getTreatments = async (_req, res) => {
+const getTreatments = async (_req, res, next) => {
   try {
     const treatments = await Treatment.find().sort({ createdAt: -1 });
     res.status(200).json(treatments);
   } catch (error) {
     console.error("Failed to fetch treatments:", error);
-    res.status(500).json({ message: "Failed to fetch treatments" });
+    next(error);
   }
 };
 
-const getTreatmentById = async (req, res) => {
+const getTreatmentById = async (req, res, next) => {
   try {
     const treatment = await Treatment.findById(req.params.id);
 
     if (!treatment) {
-      return res.status(404).json({ message: "Treatment not found" });
+      return next(httpError(404, "Treatment not found"));
     }
 
     res.status(200).json(treatment);
   } catch (error) {
     console.error("Failed to fetch treatment:", error);
-    res.status(500).json({ message: "Failed to fetch treatment" });
+    next(error);
   }
 };
 
-const createTreatment = async (req, res) => {
+const createTreatment = async (req, res, next) => {
   try {
     // const title = req.body.title?.trim();
     const title = normalizeTitle(req.body.title);
     const colorCode = req.body.colorCode?.trim();
 
     if (!title || !colorCode) {
-      return res.status(400).json({ message: "Title and colorCode are required" });
+      return next(httpError(400, "Title and colorCode are required"));
     }
 
     if (!req.file) {
-      return res.status(400).json({ message: "Image file is required" });
+      return next(httpError(400, "Image file is required"));
     }
 
     const { imageUrl, imagePublicId } = await uploadImage(req.file);
@@ -79,16 +85,16 @@ const createTreatment = async (req, res) => {
     res.status(201).json(treatment);
   } catch (error) {
     console.error("Failed to create treatment:", error);
-    res.status(500).json({ message: "Failed to create treatment" });
+    next(error);
   }
 };
 
-const updateTreatment = async (req, res) => {
+const updateTreatment = async (req, res, next) => {
   try {
     const treatment = await Treatment.findById(req.params.id);
 
     if (!treatment) {
-      return res.status(404).json({ message: "Treatment not found" });
+      return next(httpError(404, "Treatment not found"));
     }
 
     // const title = req.body.title?.trim();
@@ -97,14 +103,14 @@ const updateTreatment = async (req, res) => {
 
     if (title !== undefined) {
       if (!title) {
-        return res.status(400).json({ message: "Title cannot be empty" });
+        return next(httpError(400, "Title cannot be empty"));
       }
       treatment.title = title;
     }
 
     if (colorCode !== undefined) {
       if (!colorCode) {
-        return res.status(400).json({ message: "colorCode cannot be empty" });
+        return next(httpError(400, "colorCode cannot be empty"));
       }
       treatment.colorCode = colorCode;
     }
@@ -124,16 +130,16 @@ const updateTreatment = async (req, res) => {
     res.status(200).json(treatment);
   } catch (error) {
     console.error("Failed to update treatment:", error);
-    res.status(500).json({ message: "Failed to update treatment" });
+    next(error);
   }
 };
 
-const deleteTreatment = async (req, res) => {
+const deleteTreatment = async (req, res, next) => {
   try {
     const treatment = await Treatment.findById(req.params.id);
 
     if (!treatment) {
-      return res.status(404).json({ message: "Treatment not found" });
+      return next(httpError(404, "Treatment not found"));
     }
 
     if (treatment.imagePublicId) {
@@ -144,7 +150,7 @@ const deleteTreatment = async (req, res) => {
     res.status(200).json({ message: "Treatment deleted" });
   } catch (error) {
     console.error("Failed to delete treatment:", error);
-    res.status(500).json({ message: "Failed to delete treatment" });
+    next(error);
   }
 };
 
