@@ -2,8 +2,11 @@ const jwt = require("jsonwebtoken");
 const bcrypt = require("bcryptjs");
 const cloudinary = require("../config/cloudinary");
 const User = require("../models/User");
+const sendEmail = require("../utils/sendEmail");
+const registrationSuccess = require("../utils/registrationSuccess")
 
 const { JWT_SECRET } = process.env;
+const validrole  = ["admin", "superadmin", "administrator"];
 
 const ensureJwtConfigured = () => {
   if (!JWT_SECRET) {
@@ -41,10 +44,16 @@ const registerUser = async (req, res) => {
       address,
       designation,
       password,
+      role,
     } = req.body;
 
-    if (!firstName || !lastName || !phoneNumber || !email || !password) {
+    if (!firstName || !lastName || !phoneNumber || !email || !password || !role) {
       return res.status(400).json({ message: "Missing required fields" });
+    }
+
+    // check a valid email or not 
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ message: "Valid email is required" });
     }
 
     const existing = await User.findOne({ email });
@@ -57,6 +66,9 @@ const registerUser = async (req, res) => {
       uploadedImage = await uploadUserImage(req.file);
     }
 
+    if(!validrole.includes(role)){
+      return res.status(400).json({ message: "Invalid role" });
+    }
     const user = await User.create({
       firstName,
       lastName,
@@ -67,7 +79,15 @@ const registerUser = async (req, res) => {
       userImage: uploadedImage?.imageUrl,
       userImagePublicId: uploadedImage?.imagePublicId,
       password,
+      role,
     });
+
+    // send email to user
+    sendEmail(
+      user.email,
+      "Registration Success",
+      registrationSuccess(user)
+    )
 
     // const token = generateToken(user._id);
     const token = generateToken(user._id, user.tokenVersion);

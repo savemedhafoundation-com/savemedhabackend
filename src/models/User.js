@@ -1,6 +1,9 @@
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
 
+// selected role
+
+const role  = ["admin", "superadmin", "administrator"];
 const userSchema = new mongoose.Schema(
   {
     firstName: { type: String, required: true, trim: true },
@@ -13,8 +16,10 @@ const userSchema = new mongoose.Schema(
     userImagePublicId: { type: String, trim: true },
     password: { type: String, required: true, minlength: 6 },
     tokenVersion : { type: Number, default: 0 },
+    role: { type: String, enum: role, default: "administartor" },
   },
   { timestamps: true }
+  
 );
 
 userSchema.pre("save", async function hashPassword() {
