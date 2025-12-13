@@ -175,6 +175,20 @@ const updateUser = async (req, res) => {
       user.password = password;
     }
 
+    if (req.body.role) {
+      if(!validrole.includes(req.body.role)){
+        return res.status(400).json({ message: "Invalid role" });
+      }
+      user.role = req.body.role;
+    }
+
+    user.firstName = req.body.firstName || user.firstName;
+    user.lastName = req.body.lastName || user.lastName;
+    user.phoneNumber = req.body.phoneNumber || user.phoneNumber;
+    user.email = req.body.email || user.email;
+    user.address = req.body.address || user.address;
+    user.designation = req.body.designation || user.designation;
+
     await user.save();
     const safeUser = user.toJSON();
     return res.status(200).json(safeUser);
