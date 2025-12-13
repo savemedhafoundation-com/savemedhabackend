@@ -16,7 +16,7 @@ const userSchema = new mongoose.Schema(
     userImagePublicId: { type: String, trim: true },
     password: { type: String, required: true, minlength: 6 },
     tokenVersion : { type: Number, default: 0 },
-    role: { type: String, enum: role, default: "administartor" },
+    role: { type: String, required: true, enum: role, default: "administrator" },
   },
   { timestamps: true }
   
