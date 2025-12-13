@@ -19,6 +19,7 @@ const contactUsRoutes = require("./src/routes/contactUsRoutes");
 const jobRoutes = require("./src/routes/jobRoutes");
 const applicationRoutes = require("./src/routes/applicationRoutes");
 const userRoutes = require("./src/routes/userRoutes");
+const countRoutes = require("./src/routes/countRoutes");
 const authMiddleware = require("./src/middlewares/authMiddleware");
 const globalErrorHandler = require("./src/middlewares/globalErrorHandler");
 
@@ -75,6 +76,8 @@ app.use("/api/applications", applicationRoutes);
 app.use("/api/callbacks", callbackRoutes);
 app.use("/api/newsletter", newsletterRoutes);
 
+// count for cities and Members
+app.use("/api/cities", countRoutes);
 // 404 handler for any unmatched routes
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Not found" });
