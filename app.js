@@ -26,6 +26,7 @@ const countRoutes = require("./src/routes/countRoutes");
 const analyticsRoutes = require("./src/routes/analyticsRoutes");
 const treatmentFaqRoutes = require("./src/routes/treatmentFaqsRoute");
 const patientSuccessRoutes = require("./src/routes/patientSuccessRoutes");
+const socialWorkRoutes = require("./src/routes/socialWorkRoutes");
 const authMiddleware = require("./src/middlewares/authMiddleware");
 const globalErrorHandler = require("./src/middlewares/globalErrorHandler");
 const PreferenceEvent = require("./src/models/PreferenceEvent");
@@ -206,6 +207,8 @@ app.use("/api/cities", countRoutes);
 app.use("/api/analytics", analyticsRoutes);
 // Patient success stories: public read, protected write
 app.use("/api/patient-success-stories", patientSuccessRoutes);
+// Student Social Work Certificate Program
+app.use("/api/social-work", socialWorkRoutes);
 // 404 handler for any unmatched routes
 app.use((req, res) => {
   res.status(404).json({ success: false, message: "Not found" });

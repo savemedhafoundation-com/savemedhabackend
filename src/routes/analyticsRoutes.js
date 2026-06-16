@@ -1,6 +1,4 @@
 const express = require("express");
-const { trackVisit, getDailyStats } = require("../controllers/analyticsController");
-const authMiddleware = require("../middlewares/authMiddleware");
 
 const router = express.Router();
 
