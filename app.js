@@ -37,14 +37,19 @@ app.set("trust proxy", true);
 const allowedOrigins = [
   "https://savemedha.com",
   "https://savemedha-admin.vercel.app",
-  "http://localhost:5173"
+  "http://localhost:5173",
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",").map((url) => url.trim()) : []),
 ];
+
+const isAllowedOrigin = (origin) =>
+  allowedOrigins.includes(origin) ||
+  /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin || "");
 
 app.use(
   cors({
     origin: (origin, callback) => {
       if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) return callback(null, true);
+      if (isAllowedOrigin(origin)) return callback(null, true);
       return callback(new Error("Not allowed by CORS"));
     },
     methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],

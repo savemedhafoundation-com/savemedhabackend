@@ -4,12 +4,17 @@ const connectDB = require("../src/config/db");
 const allowedOrigins = [
   "https://savemedha.com",
   "https://savemedha-admin.vercel.app",
+  ...(process.env.FRONTEND_URL ? process.env.FRONTEND_URL.split(",").map((url) => url.trim()) : []),
 ];
+
+const isAllowedOrigin = (origin) =>
+  allowedOrigins.includes(origin) ||
+  /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(origin || "");
 
 const applyCorsHeaders = (req, res) => {
   const origin = req.headers.origin;
 
-  if (origin && allowedOrigins.includes(origin)) {
+  if (origin && isAllowedOrigin(origin)) {
     res.setHeader("Access-Control-Allow-Origin", origin);
     res.setHeader("Vary", "Origin");
   }
