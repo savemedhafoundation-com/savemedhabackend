@@ -4,6 +4,8 @@ const authMiddleware = require("../middlewares/authMiddleware");
 const {
   getEbooks,
   getEbookById,
+  getEbookUploadSignature,
+  cleanupEbookUploads,
   createEbook,
   updateEbook,
   deleteEbook,
@@ -15,7 +17,7 @@ const router = express.Router();
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB combined safety limit
+  limits: { fileSize: 20 * 1024 * 1024 }, // 20MB per-file limit for legacy multipart clients
   // fileFilter: (_req, file, cb) => {
   //   const isPdfField = file.fieldname === "pdf" || file.fieldname === "file";
   //   const isImageField = file.fieldname === "image" || file.fieldname === "banner";
@@ -36,6 +38,8 @@ router.get("/", getEbooks);
 router.get("/search", searchEbooks);
 router.get("/:id/download", downloadEbook);
 router.get("/:id", getEbookById);
+router.post("/upload-signature", authMiddleware, getEbookUploadSignature);
+router.post("/upload-cleanup", authMiddleware, cleanupEbookUploads);
 
 router.post(
   "/",

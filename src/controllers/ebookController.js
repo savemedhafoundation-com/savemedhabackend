@@ -1,6 +1,12 @@
 const { Readable } = require("stream");
 const Ebook = require("../models/Ebook");
 const cloudinary = require("../config/cloudinary");
+const {
+  createEbookUploadSignature: buildEbookUploadSignature,
+  inspectEbookUpload,
+  removeEbookUpload,
+  verifyEbookUpload,
+} = require("../services/ebookAssetService");
 
 const streamUpload = (file, options) =>
   new Promise((resolve, reject) => {
@@ -37,6 +43,13 @@ const getUploadedImage = (req) => {
   return null;
 };
 
+const getPdfDownloadUrl = (publicId) =>
+  cloudinary.utils?.private_download_url?.(publicId, "pdf", {
+    resource_type: "raw",
+    attachment: true,
+    type: "upload",
+  });
+
 const uploadPdf = async (file) => {
   const uploadResult = await streamUpload(file, {
     folder: "savemedha/ebooks/pdfs",
@@ -45,12 +58,7 @@ const uploadPdf = async (file) => {
     type: "upload",
   });
 
-  const pdfUrl =
-    cloudinary.utils?.private_download_url?.(uploadResult.public_id, "pdf", {
-      resource_type: "raw",
-      attachment: true,
-      type: "upload",
-    }) || uploadResult.secure_url;
+  const pdfUrl = getPdfDownloadUrl(uploadResult.public_id) || uploadResult.secure_url;
 
   return {
     pdfUrl,
@@ -80,6 +88,111 @@ const uploadImage = async (file) => {
   };
 };
 
+const removeStoredImage = async (publicId) => {
+  if (!publicId) return;
+  try {
+    await cloudinary.uploader.destroy(publicId, { resource_type: "image" });
+  } catch (err) {
+    console.error("Failed to delete banner from Cloudinary:", err);
+  }
+};
+
+const getDirectAsset = (req, fieldName) => {
+  const asset = req.body?.[fieldName];
+  return asset && typeof asset === "object" ? asset : null;
+};
+
+const resolvePdfAsset = async (req) => {
+  const file = getUploadedPdf(req);
+  if (file) return uploadPdf(file);
+
+  const directAsset = getDirectAsset(req, "pdfAsset");
+  if (!directAsset) return null;
+
+  const verified = await inspectEbookUpload(directAsset, "pdf");
+  return {
+    pdfUrl: getPdfDownloadUrl(verified.publicId) || verified.secureUrl,
+    cloudinaryId: verified.publicId,
+  };
+};
+
+const resolveImageAsset = async (req) => {
+  const file = getUploadedImage(req);
+  if (file) return uploadImage(file);
+
+  const directAsset = getDirectAsset(req, "imageAsset");
+  if (!directAsset) return null;
+
+  const verified = await inspectEbookUpload(directAsset, "image");
+  return {
+    imageUrl: verified.secureUrl,
+    imagePublicId: verified.publicId,
+  };
+};
+
+const cleanupResolvedAssets = async (pdfAsset, imageAsset) => {
+  await Promise.all([
+    removeStoredPdf(pdfAsset?.cloudinaryId),
+    removeStoredImage(imageAsset?.imagePublicId),
+  ]);
+};
+
+const resolveRequestedAssets = async (req) => {
+  const outcomes = await Promise.allSettled([
+    resolvePdfAsset(req),
+    resolveImageAsset(req),
+  ]);
+  const pdfAsset = outcomes[0].status === "fulfilled" ? outcomes[0].value : null;
+  const imageAsset = outcomes[1].status === "fulfilled" ? outcomes[1].value : null;
+  const failed = outcomes.find((outcome) => outcome.status === "rejected");
+
+  if (failed) {
+    await cleanupResolvedAssets(pdfAsset, imageAsset);
+    throw failed.reason;
+  }
+
+  return { pdfAsset, imageAsset };
+};
+
+const sendEbookError = (res, error, fallbackMessage) => {
+  const statusCode = Number(error.statusCode);
+  const isSafeError = Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600;
+
+  return res.status(isSafeError ? statusCode : 500).json({
+    message: isSafeError ? error.message : fallbackMessage,
+  });
+};
+
+const getEbookUploadSignature = (req, res) => {
+  try {
+    return res.status(200).json(buildEbookUploadSignature(req.body?.kind));
+  } catch (error) {
+    console.error("Failed to sign ebook upload:", error);
+    return sendEbookError(res, error, "Failed to prepare ebook upload");
+  }
+};
+
+const cleanupEbookUploads = async (req, res) => {
+  try {
+    const assets = req.body?.assets;
+    if (!Array.isArray(assets) || assets.length === 0 || assets.length > 2) {
+      return res.status(400).json({ message: "One or two uploaded assets are required" });
+    }
+
+    await Promise.all(
+      assets.map(async ({ asset, kind }) => {
+        const verified = verifyEbookUpload(asset, kind);
+        await removeEbookUpload(verified.publicId, kind);
+      })
+    );
+
+    return res.status(204).end();
+  } catch (error) {
+    console.error("Failed to clean up ebook uploads:", error);
+    return sendEbookError(res, error, "Failed to clean up ebook uploads");
+  }
+};
+
 const getEbooks = async (_req, res) => {
   try {
     const ebooks = await Ebook.find().sort({ createdAt: -1, title: 1 });
@@ -106,6 +219,10 @@ const getEbookById = async (req, res) => {
 };
 
 const createEbook = async (req, res) => {
+  let pdfAsset = null;
+  let imageAsset = null;
+  let persisted = false;
+
   try {
     const { title, description } = req.body;
     const authors = normalizeArray(req.body.authors);
@@ -115,38 +232,45 @@ const createEbook = async (req, res) => {
       return res.status(400).json({ message: "Title and description are required" });
     }
 
-    const pdfFile = getUploadedPdf(req);
-    if (!pdfFile) {
+    const hasPdf = Boolean(getUploadedPdf(req) || getDirectAsset(req, "pdfAsset"));
+    if (!hasPdf) {
       return res.status(400).json({ message: "PDF file is required" });
     }
 
-    const imageFile = getUploadedImage(req);
-    if (!imageFile) {
+    const hasImage = Boolean(getUploadedImage(req) || getDirectAsset(req, "imageAsset"));
+    if (!hasImage) {
       return res.status(400).json({ message: "Banner image is required" });
     }
 
-    const { pdfUrl, cloudinaryId } = await uploadPdf(pdfFile);
-    const { imageUrl, imagePublicId } = await uploadImage(imageFile);
+    ({ pdfAsset, imageAsset } = await resolveRequestedAssets(req));
 
     const ebook = await Ebook.create({
       title,
       description,
       authors,
       tags,
-      pdfUrl,
-      cloudinaryId,
-      imageUrl,
-      imagePublicId,
+      pdfUrl: pdfAsset.pdfUrl,
+      cloudinaryId: pdfAsset.cloudinaryId,
+      imageUrl: imageAsset.imageUrl,
+      imagePublicId: imageAsset.imagePublicId,
     });
+    persisted = true;
 
-    res.status(201).json(ebook);
+    return res.status(201).json(ebook);
   } catch (error) {
+    if (!persisted) {
+      await cleanupResolvedAssets(pdfAsset, imageAsset);
+    }
     console.error("Failed to create ebook:", error);
-    res.status(500).json({ message: "Failed to create ebook" });
+    return sendEbookError(res, error, "Failed to create ebook");
   }
 };
 
 const updateEbook = async (req, res) => {
+  let newPdfAsset = null;
+  let newImageAsset = null;
+  let persisted = false;
+
   try {
     const { title, description } = req.body;
     const authors = normalizeArray(req.body.authors);
@@ -162,35 +286,37 @@ const updateEbook = async (req, res) => {
     if (req.body.authors !== undefined) ebook.authors = authors;
     if (req.body.tags !== undefined) ebook.tags = tags;
 
-    const pdfFile = getUploadedPdf(req);
-    if (pdfFile) {
-      const { pdfUrl, cloudinaryId } = await uploadPdf(pdfFile);
+    const oldPdfId = ebook.cloudinaryId;
+    const oldImageId = ebook.imagePublicId;
+    const resolved = await resolveRequestedAssets(req);
+    newPdfAsset = resolved.pdfAsset;
+    newImageAsset = resolved.imageAsset;
 
-      if (ebook.cloudinaryId) {
-        await removeStoredPdf(ebook.cloudinaryId);
-      }
-
-      ebook.pdfUrl = pdfUrl;
-      ebook.cloudinaryId = cloudinaryId;
+    if (newPdfAsset) {
+      ebook.pdfUrl = newPdfAsset.pdfUrl;
+      ebook.cloudinaryId = newPdfAsset.cloudinaryId;
     }
 
-    const imageFile = getUploadedImage(req);
-    if (imageFile) {
-      const { imageUrl, imagePublicId } = await uploadImage(imageFile);
-
-      if (ebook.imagePublicId) {
-        await cloudinary.uploader.destroy(ebook.imagePublicId);
-      }
-
-      ebook.imageUrl = imageUrl;
-      ebook.imagePublicId = imagePublicId;
+    if (newImageAsset) {
+      ebook.imageUrl = newImageAsset.imageUrl;
+      ebook.imagePublicId = newImageAsset.imagePublicId;
     }
 
     await ebook.save();
-    res.status(200).json(ebook);
+    persisted = true;
+
+    await Promise.all([
+      newPdfAsset && oldPdfId !== newPdfAsset.cloudinaryId ? removeStoredPdf(oldPdfId) : null,
+      newImageAsset && oldImageId !== newImageAsset.imagePublicId ? removeStoredImage(oldImageId) : null,
+    ]);
+
+    return res.status(200).json(ebook);
   } catch (error) {
+    if (!persisted) {
+      await cleanupResolvedAssets(newPdfAsset, newImageAsset);
+    }
     console.error("Failed to update ebook:", error);
-    res.status(500).json({ message: "Failed to update ebook" });
+    return sendEbookError(res, error, "Failed to update ebook");
   }
 };
 
@@ -206,9 +332,7 @@ const deleteEbook = async (req, res) => {
       await removeStoredPdf(ebook.cloudinaryId);
     }
 
-    if (ebook.imagePublicId) {
-      await cloudinary.uploader.destroy(ebook.imagePublicId);
-    }
+    await removeStoredImage(ebook.imagePublicId);
 
     await ebook.deleteOne();
     res.status(200).json({ message: "Ebook deleted" });
@@ -246,14 +370,7 @@ const downloadEbook = async (req, res) => {
       return res.status(404).json({ message: "Ebook not found" });
     }
 
-    const pdfUrl =
-      (ebook.cloudinaryId &&
-        cloudinary.utils?.private_download_url?.(ebook.cloudinaryId, "pdf", {
-          resource_type: "raw",
-          attachment: true,
-          type: "upload",
-        })) ||
-      ebook.pdfUrl;
+    const pdfUrl = (ebook.cloudinaryId && getPdfDownloadUrl(ebook.cloudinaryId)) || ebook.pdfUrl;
 
     if (pdfUrl && pdfUrl.startsWith("http")) {
       return res.redirect(pdfUrl);
@@ -269,6 +386,8 @@ const downloadEbook = async (req, res) => {
 module.exports = {
   getEbooks,
   getEbookById,
+  getEbookUploadSignature,
+  cleanupEbookUploads,
   createEbook,
   updateEbook,
   deleteEbook,
