@@ -5,6 +5,7 @@ const {
   getEbooks,
   getEbookById,
   getEbookUploadSignature,
+  handleEbookBlobUpload,
   cleanupEbookUploads,
   createEbook,
   updateEbook,
@@ -39,6 +40,7 @@ router.get("/search", searchEbooks);
 router.get("/:id/download", downloadEbook);
 router.get("/:id", getEbookById);
 router.post("/upload-signature", authMiddleware, getEbookUploadSignature);
+router.post("/blob-upload", authMiddleware, handleEbookBlobUpload);
 router.post("/upload-cleanup", authMiddleware, cleanupEbookUploads);
 
 router.post(

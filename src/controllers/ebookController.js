@@ -1,4 +1,5 @@
 const { Readable } = require("stream");
+const { handleUpload } = require("@vercel/blob/client");
 const Ebook = require("../models/Ebook");
 const cloudinary = require("../config/cloudinary");
 const {
@@ -7,6 +8,13 @@ const {
   removeEbookUpload,
   verifyEbookUpload,
 } = require("../services/ebookAssetService");
+const {
+  BLOB_PROVIDER,
+  getEbookBlobTokenOptions,
+  inspectEbookBlobUpload,
+  isEbookBlobAsset,
+  removeEbookBlob,
+} = require("../services/ebookBlobService");
 
 const streamUpload = (file, options) =>
   new Promise((resolve, reject) => {
@@ -63,10 +71,13 @@ const uploadPdf = async (file) => {
   return {
     pdfUrl,
     cloudinaryId: uploadResult.public_id,
+    pdfDownloadUrl: pdfUrl,
+    pdfStorageKey: uploadResult.public_id,
+    pdfStorageProvider: "cloudinary",
   };
 };
 
-const removeStoredPdf = async (filename) => {
+const removeStoredCloudinaryPdf = async (filename) => {
   if (!filename) return;
   try {
     await cloudinary.uploader.destroy(filename, { resource_type: "raw" });
@@ -97,10 +108,39 @@ const removeStoredImage = async (publicId) => {
   }
 };
 
+const removeStoredPdfAsset = async (asset) => {
+  if (!asset) return;
+
+  if (asset.pdfStorageProvider === BLOB_PROVIDER) {
+    if (!asset.pdfStorageKey) return;
+    try {
+      await removeEbookBlob(asset.pdfStorageKey);
+    } catch (error) {
+      console.error("Failed to delete PDF from Vercel Blob:", error);
+    }
+    return;
+  }
+
+  await removeStoredCloudinaryPdf(asset.cloudinaryId || asset.pdfStorageKey);
+};
+
+const getStoredPdfAsset = (ebook) => {
+  if (!ebook) return null;
+  const isBlob = ebook.pdfStorageProvider === BLOB_PROVIDER;
+  return {
+    cloudinaryId: isBlob ? null : ebook.cloudinaryId,
+    pdfStorageKey: isBlob ? ebook.pdfStorageKey : ebook.cloudinaryId || ebook.pdfStorageKey,
+    pdfStorageProvider: isBlob ? BLOB_PROVIDER : "cloudinary",
+  };
+};
+
 const getDirectAsset = (req, fieldName) => {
   const asset = req.body?.[fieldName];
   return asset && typeof asset === "object" ? asset : null;
 };
+
+const canDeleteUnreferencedBlob = async (pdfStorageKey) =>
+  !(await Ebook.exists({ pdfStorageProvider: BLOB_PROVIDER, pdfStorageKey }));
 
 const resolvePdfAsset = async (req) => {
   const file = getUploadedPdf(req);
@@ -109,10 +149,18 @@ const resolvePdfAsset = async (req) => {
   const directAsset = getDirectAsset(req, "pdfAsset");
   if (!directAsset) return null;
 
+  if (isEbookBlobAsset(directAsset)) {
+    return inspectEbookBlobUpload(directAsset, { canDeleteBlob: canDeleteUnreferencedBlob });
+  }
+
   const verified = await inspectEbookUpload(directAsset, "pdf");
+  const pdfUrl = getPdfDownloadUrl(verified.publicId) || verified.secureUrl;
   return {
-    pdfUrl: getPdfDownloadUrl(verified.publicId) || verified.secureUrl,
+    pdfUrl,
     cloudinaryId: verified.publicId,
+    pdfDownloadUrl: pdfUrl,
+    pdfStorageKey: verified.publicId,
+    pdfStorageProvider: "cloudinary",
   };
 };
 
@@ -130,10 +178,36 @@ const resolveImageAsset = async (req) => {
   };
 };
 
+const removePdfIfUnreferenced = async (pdfAsset) => {
+  if (!pdfAsset) return;
+  const storageKey = pdfAsset.cloudinaryId || pdfAsset.pdfStorageKey;
+  if (!storageKey) return;
+  try {
+    const query =
+      pdfAsset.pdfStorageProvider === BLOB_PROVIDER
+        ? { pdfStorageProvider: BLOB_PROVIDER, pdfStorageKey: storageKey }
+        : { cloudinaryId: storageKey };
+    const referenced = await Ebook.exists(query);
+    if (!referenced) await removeStoredPdfAsset(pdfAsset);
+  } catch (error) {
+    console.error("Failed to check PDF references during cleanup:", error);
+  }
+};
+
+const removeImageIfUnreferenced = async (imagePublicId) => {
+  if (!imagePublicId) return;
+  try {
+    const referenced = await Ebook.exists({ imagePublicId });
+    if (!referenced) await removeStoredImage(imagePublicId);
+  } catch (error) {
+    console.error("Failed to check banner references during cleanup:", error);
+  }
+};
+
 const cleanupResolvedAssets = async (pdfAsset, imageAsset) => {
   await Promise.all([
-    removeStoredPdf(pdfAsset?.cloudinaryId),
-    removeStoredImage(imageAsset?.imagePublicId),
+    removePdfIfUnreferenced(pdfAsset),
+    removeImageIfUnreferenced(imageAsset?.imagePublicId),
   ]);
 };
 
@@ -172,6 +246,24 @@ const getEbookUploadSignature = (req, res) => {
   }
 };
 
+const handleEbookBlobUpload = async (req, res) => {
+  try {
+    const result = await handleUpload({
+      body: req.body,
+      request: req,
+      onBeforeGenerateToken: getEbookBlobTokenOptions,
+    });
+
+    return res.status(200).json(result);
+  } catch (error) {
+    console.error("Failed to handle ebook Blob upload:", error);
+    const statusCode = Number(error.statusCode);
+    return res
+      .status(Number.isInteger(statusCode) && statusCode >= 400 && statusCode < 600 ? statusCode : 400)
+      .json({ message: error.message || "Failed to prepare ebook Blob upload" });
+  }
+};
+
 const cleanupEbookUploads = async (req, res) => {
   try {
     const assets = req.body?.assets;
@@ -181,7 +273,25 @@ const cleanupEbookUploads = async (req, res) => {
 
     await Promise.all(
       assets.map(async ({ asset, kind }) => {
+        if (kind === "pdf" && isEbookBlobAsset(asset)) {
+          const verifiedBlob = await inspectEbookBlobUpload(asset, {
+            canDeleteBlob: canDeleteUnreferencedBlob,
+          });
+          const referenced = await Ebook.exists({
+            pdfStorageProvider: BLOB_PROVIDER,
+            pdfStorageKey: verifiedBlob.pdfStorageKey,
+          });
+          if (!referenced) await removeEbookBlob(verifiedBlob.pdfStorageKey);
+          return;
+        }
+
         const verified = verifyEbookUpload(asset, kind);
+        const referenced = await Ebook.exists(
+          kind === "pdf"
+            ? { cloudinaryId: verified.publicId }
+            : { imagePublicId: verified.publicId }
+        );
+        if (referenced) return;
         await removeEbookUpload(verified.publicId, kind);
       })
     );
@@ -250,6 +360,9 @@ const createEbook = async (req, res) => {
       authors,
       tags,
       pdfUrl: pdfAsset.pdfUrl,
+      pdfDownloadUrl: pdfAsset.pdfDownloadUrl,
+      pdfStorageProvider: pdfAsset.pdfStorageProvider,
+      pdfStorageKey: pdfAsset.pdfStorageKey,
       cloudinaryId: pdfAsset.cloudinaryId,
       imageUrl: imageAsset.imageUrl,
       imagePublicId: imageAsset.imagePublicId,
@@ -286,7 +399,7 @@ const updateEbook = async (req, res) => {
     if (req.body.authors !== undefined) ebook.authors = authors;
     if (req.body.tags !== undefined) ebook.tags = tags;
 
-    const oldPdfId = ebook.cloudinaryId;
+    const oldPdfAsset = getStoredPdfAsset(ebook);
     const oldImageId = ebook.imagePublicId;
     const resolved = await resolveRequestedAssets(req);
     newPdfAsset = resolved.pdfAsset;
@@ -294,7 +407,10 @@ const updateEbook = async (req, res) => {
 
     if (newPdfAsset) {
       ebook.pdfUrl = newPdfAsset.pdfUrl;
-      ebook.cloudinaryId = newPdfAsset.cloudinaryId;
+      ebook.pdfDownloadUrl = newPdfAsset.pdfDownloadUrl;
+      ebook.pdfStorageProvider = newPdfAsset.pdfStorageProvider;
+      ebook.pdfStorageKey = newPdfAsset.pdfStorageKey;
+      ebook.cloudinaryId = newPdfAsset.cloudinaryId || null;
     }
 
     if (newImageAsset) {
@@ -306,8 +422,12 @@ const updateEbook = async (req, res) => {
     persisted = true;
 
     await Promise.all([
-      newPdfAsset && oldPdfId !== newPdfAsset.cloudinaryId ? removeStoredPdf(oldPdfId) : null,
-      newImageAsset && oldImageId !== newImageAsset.imagePublicId ? removeStoredImage(oldImageId) : null,
+      newPdfAsset && oldPdfAsset.pdfStorageKey !== newPdfAsset.pdfStorageKey
+        ? removePdfIfUnreferenced(oldPdfAsset)
+        : null,
+      newImageAsset && oldImageId !== newImageAsset.imagePublicId
+        ? removeImageIfUnreferenced(oldImageId)
+        : null,
     ]);
 
     return res.status(200).json(ebook);
@@ -328,13 +448,14 @@ const deleteEbook = async (req, res) => {
       return res.status(404).json({ message: "Ebook not found" });
     }
 
-    if (ebook.cloudinaryId) {
-      await removeStoredPdf(ebook.cloudinaryId);
-    }
-
-    await removeStoredImage(ebook.imagePublicId);
-
+    const storedPdfAsset = getStoredPdfAsset(ebook);
+    const storedImageId = ebook.imagePublicId;
     await ebook.deleteOne();
+
+    await Promise.all([
+      removePdfIfUnreferenced(storedPdfAsset),
+      removeImageIfUnreferenced(storedImageId),
+    ]);
     res.status(200).json({ message: "Ebook deleted" });
   } catch (error) {
     console.error("Failed to delete ebook:", error);
@@ -370,7 +491,12 @@ const downloadEbook = async (req, res) => {
       return res.status(404).json({ message: "Ebook not found" });
     }
 
-    const pdfUrl = (ebook.cloudinaryId && getPdfDownloadUrl(ebook.cloudinaryId)) || ebook.pdfUrl;
+    const isBlobPdf = ebook.pdfStorageProvider === BLOB_PROVIDER;
+    const pdfUrl = isBlobPdf
+      ? ebook.pdfDownloadUrl || ebook.pdfUrl
+      : (ebook.cloudinaryId && getPdfDownloadUrl(ebook.cloudinaryId)) ||
+        ebook.pdfDownloadUrl ||
+        ebook.pdfUrl;
 
     if (pdfUrl && pdfUrl.startsWith("http")) {
       return res.redirect(pdfUrl);
@@ -387,6 +513,7 @@ module.exports = {
   getEbooks,
   getEbookById,
   getEbookUploadSignature,
+  handleEbookBlobUpload,
   cleanupEbookUploads,
   createEbook,
   updateEbook,

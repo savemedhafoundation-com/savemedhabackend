@@ -34,9 +34,23 @@ const ebookSchema = new mongoose.Schema(
       type: String,
       required: true,
     },
+    pdfDownloadUrl: {
+      type: String,
+      default: null,
+    },
+    pdfStorageProvider: {
+      type: String,
+      enum: ["cloudinary", "vercel-blob"],
+      default: "cloudinary",
+      required: true,
+    },
+    pdfStorageKey: {
+      type: String,
+      default: null,
+    },
     cloudinaryId: {
       type: String,
-      required: true,
+      default: null,
     },
     imageUrl: {
       type: String,

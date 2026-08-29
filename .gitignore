@@ -63,3 +63,5 @@ Thumbs.db
 # Optional:
 
 .vercel
+
+.env*
